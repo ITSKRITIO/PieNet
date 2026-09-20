@@ -1,0 +1,156 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+enum AttendStatus {
+  GOING
+  MAYBE
+}
+
+model User {
+  id           String   @id @default(cuid())
+  username     String   @unique @db.VarChar(24)
+  passwordHash String   @db.VarChar(255)
+  bio          String   @default("") @db.VarChar(300)
+  disabled     Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  lastSeenAt   DateTime?
+
+  sessions       Session[]
+  messages       Message[]
+  plans          Plan[]
+  participations PlanParticipant[]
+  announcements  Announcement[]
+  albums         Album[]
+  photos         Photo[]
+
+  @@map("users")
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  tokenHash String   @unique @db.VarChar(64)
+  userId    String
+  isAdmin   Boolean  @default(false)
+  userAgent String?  @db.VarChar(255)
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("sessions")
+}
+
+model Message {
+  id        String   @id @default(cuid())
+  userId    String
+  content   String   @db.VarChar(500)
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Drives both the 24h history query and the scheduled cleanup.
+  @@index([createdAt])
+  @@index([userId])
+  @@map("messages")
+}
+
+model Plan {
+  id          String    @id @default(cuid())
+  title       String    @db.VarChar(120)
+  description String    @default("") @db.Text
+  location    String    @default("") @db.VarChar(160)
+  startsAt    DateTime
+  endsAt      DateTime?
+  creatorId   String
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  creator      User              @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  participants PlanParticipant[]
+
+  @@index([startsAt])
+  @@index([creatorId])
+  @@map("plans")
+}
+
+model PlanParticipant {
+  planId    String
+  userId    String
+  status    AttendStatus @default(GOING)
+  createdAt DateTime     @default(now())
+
+  plan Plan @relation(fields: [planId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([planId, userId])
+  @@index([userId])
+  @@map("plan_participants")
+}
+
+model Announcement {
+  id        String   @id @default(cuid())
+  title     String   @db.VarChar(140)
+  content   String   @db.Text
+  pinned    Boolean  @default(false)
+  authorId  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  author User @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([createdAt])
+  @@index([authorId])
+  @@map("announcements")
+}
+
+model Album {
+  id          String   @id @default(cuid())
+  name        String   @db.VarChar(80)
+  description String   @default("") @db.VarChar(500)
+  creatorId   String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  creator User    @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  photos  Photo[]
+
+  @@index([createdAt])
+  @@index([creatorId])
+  @@map("albums")
+}
+
+// The image bytes live on disk (STORAGE_DIR/photos/<id>.webp and STORAGE_DIR/thumbs/<id>.webp).
+model Photo {
+  id         String   @id @db.VarChar(32)
+  albumId    String
+  uploaderId String
+  width      Int
+  height     Int
+  bytes      Int
+  createdAt  DateTime @default(now())
+
+  album    Album @relation(fields: [albumId], references: [id], onDelete: Cascade)
+  uploader User  @relation(fields: [uploaderId], references: [id], onDelete: Cascade)
+
+  @@index([albumId, createdAt])
+  @@index([uploaderId])
+  @@index([createdAt])
+  @@map("photos")
+}
+
+model Setting {
+  key       String   @id @db.VarChar(64)
+  value     String   @db.Text
+  updatedAt DateTime @updatedAt
+
+  @@map("settings")
+}
