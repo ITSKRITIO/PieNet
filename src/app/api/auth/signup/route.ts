@@ -1,3 +1,4 @@
+import { prisma } from '@/lib/prisma';
 import { handle, json, readJson, clientIp } from '@/lib/api'
 import { ApiError } from '@/lib/errors'
 import { prisma } from '@/lib/db'
